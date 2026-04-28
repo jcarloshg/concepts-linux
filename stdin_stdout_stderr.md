@@ -1,174 +1,359 @@
-# stderr & stdout
+# stdin, stdout & stderr
 
-> Todo lo que necesitas saber sobre los flujos de salida estándar en Linux/Unix.
+> Todo lo que necesitas saber sobre los flujos de entrada y salida estándar en Linux/Unix.
 
 ---
 
 ## 📍 Concepto Básico
 
-| Stream | File Descriptor | Propósito | pipe |
+Todo proceso en Unix/Linux tiene **3 flujos estándar**:
+
+| Stream | File Descriptor | Propósito | Dirección |
 |---|---|---|---|
-| **stdout** | 1 | Salida normal (resultados, datos) | ✅ Se puede pipe |
-| **stderr** | 2 | Mensajes de error, advertencias | ❌ No se pipe por default |
+| **stdin** | 0 | Entrada de datos (teclado, pipe, archivo) | ← entrada |
+| **stdout** | 1 | Salida normal (resultados, datos) | → salida |
+| **stderr** | 2 | Mensajes de error, advertencias | → salida |
 
 ```
-stdin (0) ← entrada
-stdout (1) → salida normal
-stderr (2) → errores
+        ┌──────────────┐
+ stdin  │              │
+   (0) ─┼──►  PROGRAMA ├───► stdout (1)
+        │              │
+        │              ├───► stderr (2)
+        └──────────────┘
+```
+
+**stdin** es el único flujo de entrada. Por defecto viene del teclado (tty), pero puede ser redirigido desde un archivo o desde otro comando via pipe.
+
+---
+
+## ⌨️ stdin — La Entrada Padrón
+
+### ¿Qué es stdin?
+
+Es el canal por donde los programas **reciben datos**. Sin stdin, un programa no sabe de dónde leer.
+
+### ¿De dónde viene stdin?
+
+| Fuente | Ejemplo |
+|---|---|
+| **Teclado** (tty interactivo) | `cat` sin argumentos espera input del teclado |
+| **Pipe** (de otro comando) | `echo "hola" \| cat` |
+| **Archivo redireccionado** | `cat < archivo.txt` |
+| **Here-string** | `cat <<< "texto directo"` |
+| **Here-doc** | `cat << EOF ... EOF` |
+
+### Ejemplo básico: leer de stdin
+```bash
+# Sin redirección — espera del teclado
+cat
+# Escribe algo y presiona Ctrl+D para terminar
+
+# Con pipe — el output de echo se convierte en stdin de cat
+echo "hola mundo" | cat
+
+# Con redirección — archivo se convierte en stdin
+cat < archivo.txt
+
+# Here-string — texto directo como stdin
+cat <<< "este texto viene de stdin"
 ```
 
 ---
 
-## 🔧 Redirección Básica
+## 📖 stdin en Programas
 
-### stdout a archivo
-```bash
-command > output.txt
-# equivale a:
-command 1> output.txt
+### ¿Cómo usan stdin los programas?
+
+Los programas en C/C++/Python/etc. usan el file descriptor 0 para leer:
+
+```c
+// C: read from stdin
+scanf("%s", buffer);
+// o
+read(0, buffer, sizeof(buffer));
+
+// Python: read from stdin
+nombre = input("Dame tu nombre: ")
+// o
+import sys
+sys.stdin.read()
 ```
 
-### stderr a archivo
+### stdin en scripts
 ```bash
-command 2> errors.txt
+#!/bin/bash
+# Lee línea por línea de stdin
+while read line; do
+  echo "Leído: $line"
+done
+
+# Enviar texto a un script via pipe
+echo -e "línea1\nlínea2\nlínea3" | ./mi_script.sh
+
+# Aquí-document (here-doc)
+./mi_script.sh << EOF
+primera línea
+segunda línea
+EOF
 ```
 
-### Ambos al mismo archivo
+### stdin con here-doc avanzado
 ```bash
-command > all.txt 2>&1
-# o en bash moderno:
-command &> all.txt
-```
+# here-doc con delimitador personalizado
+cat << 'FIN'
+Esto NO se expande $HOME ni variables
+FIN
 
-### stderr a stdout ( juntos)
-```bash
-command &>> all.txt   # append
-command > all.txt 2>&1 # overwrite
-```
+# here-doc SIN comillas — se expanden variables
+cat << FIN
+Mi home es: $HOME
+FIN
 
-### Solo stdout a archivo, stderr a pantalla
-```bash
-command > output.txt
-```
-
----
-
-## 🎯 Casos de Uso
-
-### 1. Silenciar errores (dev/null)
-```bash
-command 2>/dev/null   # stderr a la nada
-command >/dev/null 2>&1  # todo silenciado
-```
-
-### 2. Separar errores de resultados
-```bash
-# Guardar output válido, ver errores en pantalla
-make > build.log 2>&1
-
-# Solo errores limpios
-make 2> errors.log
-```
-
-### 3. Pipe stdout pero mantener stderr
-```bash
-command 2>&1 | grep "error"
-# Ambos van al pipe
-
-command | grep "error"
-# Solo stdout va al pipe, stderr sigue a pantalla
-```
-
-### 4. Logging con timestamps
-```bash
-command 2>&1 | while read line; do
-  echo "[$(date '+%H:%M:%S')] $line"
-done > log.txt
+# here-doc con stdin en scripts interactivos
+ftp -n << EOF
+open servidor.com
+user usuario password
+get archivo.txt
+bye
+EOF
 ```
 
 ---
 
-## 🏆 Best Practices & Tricks
+## 🔧 Redirección de stdin
 
-### 1. Silenciar output innecesario
+### `<` — Redirigir stdin desde archivo
 ```bash
-# Silenciar stdout (útil en scripts)
-command > /dev/null
+# Equivalentes:
+cat < archivo.txt
+cat archivo.txt
 
-# Silenciar ambos
-command &> /dev/null
+# ¿Cuándo importa? En programas que no aceptan filenames
+read -p "Nombre: " nombre < /dev/tty
 
-# Silenciar solo stderr
-command 2>/dev/null
+# Leer múltiples archivos
+programa < entrada.txt
 ```
 
-### 2. El经典的 2>&1 orden importa
+### `<<` — Here-document
 ```bash
-# ✅ CORRECTO — stderr va al stdout actual
-command > file.txt 2>&1
-
-# ❌ INCORRECTO — stderr va al stdout original (pantalla)
-command 2>&1 > file.txt
+# Enviar varias líneas como stdin
+mysql -u root -p << EOF
+CREATE DATABASE app;
+USE app;
+SELECT * FROM users;
+EOF
 ```
 
-### 3. Agregar a archivo existente
+### `<<<` — Here-string
 ```bash
-command >> output.log 2>&1
+# Una línea directa como stdin
+wc -c <<< "hola mundo"   # 11 (bytes)
+tr 'a-z' 'A-Z' <<< "hola"  # HOLA
+
+# Útil para comandos que esperan stdin pero no argumentos
+read -r linea <<< "texto inicial"
 ```
 
-### 4. Separar errores para debugging
+---
+
+## 🎯 Casos de Uso de stdin
+
+### 1. Enviar output de un comando como stdin de otro
 ```bash
-# En scripts: separar para encontrar problemas rápido
-./script.sh 2> errors.log
-# Si script falla, revisar errors.log
+# grep espera stdin, el pipe le envía las líneas
+ls -la | grep "\.md"
+
+# sort espera stdin
+echo -e "zebra\napple\nbanana" | sort
+
+# head/tail
+cat archivo.log | tail -20
 ```
 
-### 5. Redirect a múltiples destinos con tee
+### 2. Leer archivos grandes en partes
 ```bash
-# stdout a pantalla + archivo
-command | tee output.txt
+# Procesar línea por línea (eficiente en memoria)
+while IFS= read -r line; do
+  echo "$line"
+done < archivo_grande.txt
 
-# ambos streams a pantalla + archivo
-command 2>&1 | tee output.txt
-
-# append mode con tee
-command 2>&1 | tee -a output.txt
+# Con pipe se carga todo a memoria primero
+cat archivo_grande.txt | while read line; do
+  echo "$line"
+done
 ```
 
-### 6. stderr a stdout con | (limpiar errores)
+### 3. Scripts interactivos que preguntan
 ```bash
-# stderr va a stdout, luego se filtra
-myprogram 2>&1 | grep -i "failed"
+# Sin redirección, read funciona con el keyboard
+read -p "Tu nombre: " nom
+
+# Con redirección de archivo, no pregunta (ya hay datos)
+echo "Carlos" | ./script.sh  # read recibe "Carlos"
+
+# En producción: mejor usar argumentos, no stdin para datos
+./script.sh "Carlos"  # más claro
 ```
 
-### 7. Usar stderr para logs de scripts
+### 4. stdin en programas compilados
 ```bash
-# En scripts, usar stderr para errores intencionales
-echo "Error: algo falló" >&2
-# así no se mezcla con output normal en logs
+./programa < input.txt > output.txt 2>&1
+# input.txt → stdin de programa
+# output.txt ← stdout del programa
+# errores.txt ← stderr
 ```
 
-### 8. Intercambiar stdout y stderr
+---
+
+## 🏆 Best Practices & Tricks con stdin
+
+### 1. No uses stdin para datos en scripts de producción
 ```bash
-# Para pruebas: swap streams
-command 3>&1 1>&2 2>&3
+# ❌ Mal — stdin se mezcla con logs
+./proceso.sh < datos.txt
+
+# ✅ Mejor — argumentos explícitos
+./proceso.sh datos.txt
 ```
 
-### 9. Capturar solo errores (útil para CI/CD)
+### 2. Saber si stdin viene de terminal o pipe
 ```bash
-# Guardar errores, output normal a pantalla
-command 2> errors.txt
-# errors.txt tendrá solo stderr
+#!/bin/bash
+if [ -t 0 ]; then
+  echo "stdin viene del teclado (interactivo)"
+else
+  echo "stdin viene de pipe o archivo"
+fi
+
+# Uso práctico: auto-detectar modo
+if [ -t 0 ]; then
+  read -p "Dame el valor: " valor
+else
+  read valor
+fi
 ```
 
-### 10. Describir la redirección en un script
+### 3. Cerrar stdin explícitamente (para demonios)
 ```bash
-# Función helper para readability
-log_output() {
-  "$@" > >(tee -a stdout.log) 2> >(tee -a stderr.log >&2)
-}
+# En scripts que se vuelven daemon
+programa < /dev/null
+# Garantiza que stdin no bloquee el proceso
+```
 
-log_output make build
+### 4. Desacoplar stdin para background jobs
+```bash
+# stdin's redirected incorrectly can hang background processes
+nohup ./script.sh < /dev/null > output.log 2>&1 &
+```
+
+### 5. stdin en pipelines con read
+```bash
+# El classic problema: pipe crea subshell
+# Esto NO funciona como esperado:
+echo -e "a\nb\nc" | while read line; do
+  echo $line
+done
+
+# ✅ Alternativa: usar here-doc o redirección
+while read line; do
+  echo "$line"
+done <<< $'a\nb\nc'
+
+# o desde archivo
+printf 'a\nb\nc\n' > /tmp/temp.txt
+while read line; do
+  echo "$line"
+done < /tmp/temp.txt
+```
+
+### 6. stdin con xargs
+```bash
+# stdin se convierte en argumentos
+echo -e "file1.txt\nfile2.txt" | xargs rm
+
+# stdin vacío vs argumentos
+xargs -I {} echo "procesando {}" < input.txt
+```
+
+### 7. Probar stdin sin matar el terminal
+```bash
+# Cierra stdin y verifica que programa no cuelga
+programa < /dev/null
+
+# Test con timeout
+timeout 5 ./programa < input.txt
+```
+
+### 8. Leer stdin sin consumirlo (tee trick)
+```bash
+# Quiero ver stdin Y procesarlo
+echo "datos" | tee /dev/tty | programa
+
+# tee muestra en terminal y pasa los datos al programa
+```
+
+### 9. stdin en comandos que esperan un filename
+```bash
+# diff puede leer de stdin
+diff <(ls dir1) <(ls dir2)
+# Process substitution: ls output → diff
+
+# patch espera stdin
+patch -p1 < changes.patch
+```
+
+### 10. stdin buffer en programas interactivos
+```bash
+# Esperar entrada sin bloquear con timeout
+timeout 2 read -t 2 linea < /dev/tty
+echo "input: $linea"
+```
+
+---
+
+## 🔄 stdin, stdout & stderr Juntos
+
+### Ejemplo completo
+```bash
+# Un comando: stdin del teclado, stdout/stderr a pantalla
+cat
+
+# Redirigir stdin desde archivo
+cat < datos.txt
+
+# Solo stdout a archivo
+cat archivo.txt > output.txt
+
+# Solo stderr a archivo
+cat noexiste.txt 2> errores.txt
+
+# Ambos a archivos diferentes
+cat archivo.txt > output.txt 2> errores.txt
+
+# Ambos al mismo archivo
+cat archivo.txt > todo.txt 2>&1
+
+# stdin de pipe, stdout a archivo, stderr a archivo
+cat archivo.txt | grep "patron" > resultados.txt 2> errores.txt
+```
+
+### El clásico diagrama de redirección
+```
+                ┌── stdin (0) ────────────┐
+                │  keyboard / pipe / file  │
+                └───┬─────────────────────┘
+                    │
+               PROGRAMA
+                    │
+         ┌──────────┴──────────┐
+         │                     │
+    stdout (1)           stderr (2)
+         │                     │
+         ▼                     ▼
+    > archivo             2> archivo
+    | otro_cmd            2>&1 (a stdout)
 ```
 
 ---
@@ -177,24 +362,26 @@ log_output make build
 
 | Situación | Comando |
 |---|---|
-| Guardar stdout | `cmd > file` |
-| Guardar stderr | `cmd 2> file` |
-| Guardar ambos | `cmd > file 2>&1` |
-| Silenciar stdout | `cmd > /dev/null` |
-| Silenciar stderr | `cmd 2> /dev/null` |
-| Silenciar todo | `cmd &> /dev/null` |
-| Pipe stdout | `cmd \| other` |
-| Pipe ambos | `cmd 2>&1 \| other` |
-| Append | `cmd >> file 2>&1` |
+| Leer stdin de teclado | `cat`, `read` |
+| stdin desde archivo | `cmd < file.txt` |
+| stdin desde pipe | `echo "x" \| cmd` |
+| stdin desde texto directo | `cmd <<< "texto"` |
+| stdin multi-línea | `cmd << EOF ... EOF` |
+| Here-doc sin expansión | `cmd << 'EOF' ... EOF` |
+| Ver stdin en terminal | `tee /dev/tty` |
+| Cerrar stdin | `cmd < /dev/null` |
+| Detectar si es terminal | `[ -t 0 ]` |
+| stdin + stdout + stderr juntos | `cmd < in.txt > out.txt 2> err.txt` |
 
 ---
 
 ## 📚 Recursos
 
 - 🔗 https://www.gnu.org/software/bash/manual/html_node/Redirections.html
-- 🔗 https://stackoverflow.com/questions/4614492/bash-redirect-stderr-and-stdout
+- 🔗 https://www.gnu.org/software/bash/manual/html_node/Here-Documents.html
 - 🔗 https://linux.die.net/man/1/bash
+- 🔗 https://www.geeksforgeeks.org/input-and-output-in-c/
 
 ---
 
-> **Tip final:** Si algo falla silenciosamente — revisa `2>` stderr. Si algo se muestra pero no，你应该 captured — stdout.
+> **Tip final:** Si un comando espera input y se queda "colgado", probablemente necesita stdin desde un archivo o pipe. Presiona Ctrl+D para enviar EOF o Ctrl+C para cancelar.
