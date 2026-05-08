@@ -15,28 +15,29 @@ Linux permissions control who can read, write, and execute files and directories
 
 ### The Three Types
 
-| Type | Symbol | Numeric | Description |
-|------|--------|---------|-------------|
-| **Read** | `r` | 4 | View file contents or list directory |
-| **Write** | `w` | 2 | Modify file contents or create/delete files in directory |
-| **Execute** | `x` | 1 | Run file as program or access directory |
+| Type   | Symbol | Numeric | Description                                      |
+|--------|--------|---------|------------------------------------------------|
+| Read   | `r`    | 4       | View file contents or list directory             |
+| Write  | `w`    | 2       | Modify file contents or create/delete files      |
+| Execute| `x`    | 1       | Run file as program or access directory         |
 
 ### Permission Groups
 
-| Group | Symbol | Description |
-|-------|--------|-------------|
-| **Owner** | `u` | The user who owns the file |
-| **Group** | `g` | Users who belong to the file's group |
-| **Others** | `o` | Everyone else |
-| **All** | `a` | Combination of u, g, and o |
+| Group  | Symbol | Description                        |
+|--------|--------|------------------------------------|
+| Owner  | `u`    | The user who owns the file          |
+| Group  | `g`    | Users who belong to the file's group |
+| Others | `o`    | Everyone else                       |
+| All    | `a`    | Combination of u, g, and o          |
 
 ### Example Output
+
 ```
 -rwxr-xr-- 1 owner group 4096 May  7 22:18 script.sh
 ```
 
-Breakdown:
-- `-` → Regular file (d for directory)
+**Breakdown:**
+- `-` → Regular file (`d` for directory)
 - `rwx` → Owner permissions (read, write, execute)
 - `r-x` → Group permissions (read, execute)
 - `r--` → Others permissions (read only)
@@ -63,17 +64,48 @@ stat -c '%a' file.txt
 ```bash
 # Using symbols
 chmod u+x script.sh           # Add execute for owner
-chmod g-w file.txt             # Remove write for group
-chmod o+r file.txt             # Add read for others
-chmod a+x script.sh            # Add execute for all
-chmod 755 script.sh            # rwxr-xr-x (owner: rwx, group: r-x, others: r-x)
-chmod 644 file.txt             # rw-r--r-- (owner: rw-, group: r--, others: r--)
-chmod 600 file.txt             # rw------- (owner: rw-, group: ---, others: ---)
-chmod 400 secret.key           # r-------- (owner: r--, group: ---, others: ---)
+chmod g-w file.txt            # Remove write for group
+chmod o+r file.txt            # Add read for others
+chmod a+x script.sh           # Add execute for all
 
-# Recursive (directories only)
-chmod -R 755 /path/to/dir
+# Using octal notation
+chmod 755 script.sh           # rwxr-xr-x (owner: rwx, group: r-x, others: r-x)
+chmod 644 file.txt            # rw-r--r-- (owner: rw-, group: r--, others: r--)
+chmod 600 file.txt            # rw------- (owner: rw-, group: ---, others: ---)
+chmod 400 secret.key          # r-------- (owner: r--, group: ---, others: ---)
 ```
+
+### chmod Options
+
+| Option | Long Form      | Description                                                 |
+|--------|----------------|-------------------------------------------------------------|
+| `-R`   | `--recursive`  | Applies permission changes to all files and subdirectories  |
+| `-v`   | `--verbose`     | Outputs a diagnostic message for every file processed       |
+| `-c`   | `--changes`     | Reports only when a change is made                          |
+| `-f`   | `--silent`      | Suppresses most error messages                              |
+
+**Examples:**
+
+```bash
+# Recursive: Change all files in directory tree
+chmod -R 755 /var/www/html
+
+# Verbose: Show every file processed
+chmod -v 644 *.txt
+# Output: mode of 'file1.txt' changed to 0644
+
+# Changes only: Report only modified files
+chmod -c 640 /path/to/file
+# (no output if already correct)
+
+# Silent + recursive (common for scripts)
+chmod -Rf 755 /some/path
+
+# Combined options
+chmod -Rvc 755 /path/to/dir
+```
+
+> ⚠️ **Note:** The `-f` (silent) option should be used carefully — it may hide legitimate errors.
 
 ### Changing Owner & Group (chown, chgrp)
 
@@ -108,12 +140,11 @@ chmod u+s /usr/bin/program
 
 # Numeric: 4755 (4 = SUID)
 chmod 4755 /usr/bin/program
-
-# Shows as 's' in owner execute position
-# -rwsr-xr-x
 ```
 
-**⚠️ Security Warning:** SUID binaries are a common attack vector. Use sparingly and audit regularly.
+**Shows as:** `-rwsr-xr-x` (the `s` appears in owner execute position)
+
+> ⚠️ **Security Warning:** SUID binaries are a common attack vector. Use sparingly and audit regularly.
 
 ### SGID (Set Group ID)
 
@@ -125,41 +156,39 @@ chmod g+s /path/to/shared-dir
 
 # Numeric: 2755
 chmod 2755 /path/to/shared-dir
-
-# Shows as 's' in group execute position
-# drwxr-sr-x
 ```
+
+**Shows as:** `drwxr-sr-x` (the `s` appears in group execute position)
 
 ### Sticky Bit
 
 On directories, only the owner of a file can delete it (even if others have write permission).
 
 ```bash
-# Set sticky bit on /tmp-like directory
+# Set sticky bit
 chmod +t /path/to/shared-dir
 
 # Numeric: 1777
 chmod 1777 /path/to/shared-dir
-
-# Shows as 't' in others execute position
-# drwxrwxrwt
 ```
+
+**Shows as:** `drwxrwxrwt` (the `t` appears in others execute position)
 
 ---
 
 ## Common Permission Patterns
 
-| Scenario | Command | Numeric |
-|----------|---------|---------|
-| Executable script | `chmod +x script.sh` | 755 |
-| Regular file | `chmod 644 file.txt` | 644 |
-| Private file | `chmod 600 file.txt` | 600 |
-| Private key | `chmod 600 id_rsa` | 600 |
-| Public key | `chmod 644 id_rsa.pub` | 644 |
-| Web directory | `chmod 755 /var/www` | 755 |
-| Web file | `chmod 644 /var/www/html/*.html` | 644 |
-| Shared group dir | `chmod 2775 /shared` | 2775 |
-| Temp directory | `chmod 1777 /tmp` | 1777 |
+| Scenario            | Command                  | Numeric  |
+|---------------------|--------------------------|----------|
+| Executable script   | `chmod +x script.sh`     | 755      |
+| Regular file        | `chmod 644 file.txt`     | 644      |
+| Private file        | `chmod 600 file.txt`     | 600      |
+| Private key         | `chmod 600 id_rsa`       | 600      |
+| Public key          | `chmod 644 id_rsa.pub`   | 644      |
+| Web directory       | `chmod 755 /var/www`     | 755      |
+| Web file            | `chmod 644 *.html`       | 644      |
+| Shared group dir    | `chmod 2775 /shared`     | 2775     |
+| Temp directory      | `chmod 1777 /tmp`        | 1777     |
 
 ---
 
@@ -173,12 +202,13 @@ umask
 
 # Set umask for session
 umask 022
-
-# Common umasks:
-# 022 → files: 644, dirs: 755 (standard)
-# 002 → files: 664, dirs: 775 (groups)
-# 077 → files: 600, dirs: 700 (most restrictive)
 ```
+
+| Umask | Files | Directories |
+|-------|-------|-------------|
+| 022   | 644   | 755         |
+| 002   | 664   | 775         |
+| 077   | 600   | 700         |
 
 ---
 
@@ -189,7 +219,6 @@ For more granular permissions beyond traditional Unix permissions.
 ### Viewing ACLs
 
 ```bash
-# Show ACL for a file
 getfacl file.txt
 ```
 
@@ -288,81 +317,37 @@ chmod 644 ~/.ssh/id_rsa.pub
 
 ## Quick Reference
 
-```bash
-# Permission to numeric
-rwx = 4+2+1 = 7
-r-x = 4+0+1 = 5
-r-- = 4+0+0 = 4
+### Permission to Numeric
 
-# Common numerics
-777 = rwxrwxrwx  ⚠️ AVOID
-755 = rwxr-xr-x
-754 = rwxr-xr--
-744 = rwxr--r--
-644 = rw-r--r--
-600 = rw-------
-400 = r--------
-2755 = rwxr-sr-x (SGID)
-4755 = rwsr-xr-x (SUID)
-1777 = rwxrwxrwt (sticky bit)
 ```
+rwx = 4 + 2 + 1 = 7
+r-x = 4 + 0 + 1 = 5
+r-- = 4 + 0 + 0 = 4
+```
+
+### Common Numerics
+
+| Numeric | Permissions      | Notes                    |
+|---------|------------------|--------------------------|
+| 777     | `rwxrwxrwx`      | ⚠️ AVOID                 |
+| 755     | `rwxr-xr-x`      | Standard executables     |
+| 754     | `rwxr-xr--`      |                         |
+| 744     | `rwxr--r--`      |                         |
+| 644     | `rw-r--r--`      | Standard files           |
+| 600     | `rw-------`      | Private files            |
+| 400     | `r--------`      | Highly sensitive         |
+| 4755    | `rwsr-xr-x`      | SUID                     |
+| 2755    | `rwxr-sr-x`      | SGID                     |
+| 1777    | `rwxrwxrwt`      | Sticky bit               |
 
 ---
 
 ## Sources
 
 - Linux man pages: `man chmod`, `man chown`, `man acl`
-- https://www.redhat.com/sysadmin/linux-permissions
-- https://www.kernel.org/doc/html/latest/admin-guide/devices.html
+- [Red Hat Sysadmin Guide](https://www.redhat.com/sysadmin/linux-permissions)
+- [Linux Kernel Documentation](https://www.kernel.org/doc/html/latest/admin-guide/devices.html)
 
 ---
 
 *Generated by Boti using general-researcher skill*
----
-
-## chmod Options
-
-When using chmod (symbolic or octal notation), several options are available to control how the command operates:
-
-| Option | Long Form | Description |
-|--------|-----------|-------------|
-| `-R` | `--recursive` | Applies permission changes to all files and subdirectories within a directory |
-| `-v` | `--verbose` | Outputs a diagnostic message for every file processed |
-| `-c` | `--changes` | Reports only when a change is made (verbose for changed files only) |
-| `-f` | `--silent` | Suppresses most error messages |
-
-### Examples using options
-
-```bash
-# Recursive: Change all files in directory tree
-chmod -R 755 /var/www/html
-
-# Verbose: Show every file processed
-chmod -v 644 *.txt
-# Output: mode of 'file1.txt' changed to 0644
-# Output: mode of 'file2.txt' changed to 0644
-
-# Changes only: Report only modified files
-chmod -c 640 /path/to/file
-# Output: mode of '/path/to/file' changed to 0640
-# (no output if already correct)
-
-# Silent: Suppress error messages
-chmod -f 000 /nonexistent 2>/dev/null  # No error shown
-```
-
-### Combined options
-
-```bash
-# Silent + recursive (common for scripts)
-chmod -Rf 755 /some/path
-
-# Verbose + recursive + changes
-chmod -Rvc 755 /path/to/dir
-# Shows what would change before applying
-
-# Using long forms
-chmod --recursive --verbose --changes 755 /path/to/dir
-```
-
-**Note:** The `-f` (silent) option should be used carefully — it may hide legitimate errors that should be addressed.
